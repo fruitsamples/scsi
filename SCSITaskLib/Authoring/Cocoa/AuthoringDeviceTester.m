@@ -606,7 +606,7 @@ ErrorExit:
 		
 		else if ( err == kIOReturnNotPermitted )
 		{
-			[ [ self parentDoc ] appendLogText: @"Media is in the drive and you didn't use Carbon's FSVolumeUnmountSync/Async to eject it!\n" ];
+			[ [ self parentDoc ] appendLogText: @"Operation is not permitted\n" ];
 		}
 		
 		else

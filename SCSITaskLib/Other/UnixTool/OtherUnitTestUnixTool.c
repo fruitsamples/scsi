@@ -539,9 +539,7 @@ Inquiry ( SCSITaskDeviceInterface ** interface )
 	SCSITaskInterface **			task			= NULL;
 	IOReturn						err	 			= 0;
 	UInt64							transferCount 	= 0;
-	UInt32							transferCountHi = 0;
-	UInt32							transferCountLo = 0;				
-	IOVirtualRange					range;
+	SCSITaskSGElement				sgElement;
 	
 	printf ( "Inquiry: " );
 	
@@ -549,9 +547,13 @@ Inquiry ( SCSITaskDeviceInterface ** interface )
 	task = ( *interface )->CreateSCSITask ( interface );
 	require ( ( task != NULL ), ErrorExit );
 	
-	// Set up the range. The address is just the buffer's address. The length is our request size.
-	range.address = ( IOVirtualAddress ) &inqBuffer;
-	range.length  = sizeof ( SCSICmd_INQUIRY_StandardData );
+	// Set up the sgElement. The address is just the buffer's address. The length is our request size.
+#if __LP64__
+	sgElement.address = ( mach_vm_address_t ) &inqBuffer;
+#else
+	sgElement.address = ( IOVirtualAddress ) &inqBuffer;
+#endif
+	sgElement.length  = sizeof ( SCSICmd_INQUIRY_StandardData );
 	
 	// We're going to execute an INQUIRY to the device as a
 	// test of exclusive commands.
@@ -564,7 +566,7 @@ Inquiry ( SCSITaskDeviceInterface ** interface )
 	
 	// Set the scatter-gather entry in the task
 	err = ( *task )->SetScatterGatherEntries ( task,
-											   &range,
+											   &sgElement,
 											   1,
 											   sizeof ( SCSICmd_INQUIRY_StandardData ),
 											   kSCSIDataTransfer_FromTargetToInitiator );
@@ -582,12 +584,7 @@ Inquiry ( SCSITaskDeviceInterface ** interface )
 	err = ( *task )->GetSCSIServiceResponse ( task, &serviceResponse );
 	require ( ( err == kIOReturnSuccess ), ReleaseTask );
 	
-	// Get the transfer counts
-	transferCountHi = ( ( transferCount >> 32 ) & 0xFFFFFFFF );
-	transferCountLo = ( transferCount & 0xFFFFFFFF );
-	
-	printf ( "serviceResponse = %d, taskStatus = %d\n", serviceResponse, taskStatus );
-	printf ( "transferCountHi = 0x%08lx, transferCountLo = 0x%08lx\n", transferCountHi, transferCountLo );
+	printf ( "serviceResponse = %d, taskStatus = %d, transferCount = %qd\n", serviceResponse, taskStatus, transferCount );
 	
 	require ( ( serviceResponse == kSCSIServiceResponse_TASK_COMPLETE ), ReleaseTask );
 	

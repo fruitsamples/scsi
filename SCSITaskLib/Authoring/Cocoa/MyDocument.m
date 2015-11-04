@@ -421,10 +421,8 @@ ErrorExit:
 	SCSITaskInterface **			task			= NULL;
 	IOReturn						err	 			= kIOReturnSuccess;
 	UInt64							transferCount 	= 0;
-	UInt32							transferCountHi = 0;
-	UInt32							transferCountLo = 0;				
 	UInt8 *							buffer			= NULL;
-	IOVirtualRange					range;
+	SCSITaskSGElement				sgElement;
 	
 	[ self appendLogText: @"runExclusiveTestSuite\n\n" ];
 	
@@ -440,9 +438,13 @@ ErrorExit:
 	buffer = ( UInt8 * ) calloc ( 1, kRequestSize );
 	require ( ( buffer != NULL ), ReleaseTask );
 	
-	// Set up the range.
-	range.address = ( IOVirtualAddress ) buffer;
-	range.length  = kRequestSize;
+	// Set up the sgElement.
+#if __LP64__
+	sgElement.address = ( mach_vm_address_t ) buffer;
+#else
+	sgElement.address = ( IOVirtualAddress ) buffer;
+#endif
+	sgElement.length  = kRequestSize;
 	
 	// We're going to execute a READ_10 to the device as a
 	// test of exclusive commands.
@@ -460,7 +462,7 @@ ErrorExit:
 	
 	// Set the scatter-gather entry in the task
 	err = ( *task )->SetScatterGatherEntries ( task,
-											   &range,
+											   &sgElement,
 											   1,
 											   kRequestSize,
 											   kSCSIDataTransfer_FromTargetToInitiator );
@@ -480,10 +482,7 @@ ErrorExit:
 	err = ( *task )->GetSCSIServiceResponse ( task, &serviceResponse );
 	require ( ( err == kIOReturnSuccess ), ReleaseBuffer );
 	
-	// Get the transfer counts
-	transferCountHi = ( ( transferCount >> 32 ) & 0xFFFFFFFF );
-	transferCountLo = ( transferCount & 0xFFFFFFFF );
-	
+	// Get the transfer counts	
 	[ self appendLogText: [ NSString stringWithFormat:
 		@"serviceResponse = %d (%@), taskStatus = %d (%@)\n",
 		serviceResponse,
@@ -498,8 +497,7 @@ ErrorExit:
 		
 		int		index = 0;
 		
-		[ self appendLogText: [ NSString stringWithFormat:
-			@"transferCountHi = 0x%08lx, transferCountLo = 0x%08lx\n\n", transferCountHi, transferCountLo ] ];
+		[ self appendLogText: [ NSString stringWithFormat: @"transferCount = 0x%qx\n\n", transferCount ] ];
 		[ self appendLogText: @"Data from read:\n\n" ];
 		
 		for ( index = 0; index < kRequestSize; index += 8 )
